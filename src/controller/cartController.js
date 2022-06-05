@@ -1,9 +1,9 @@
 const cartModel = require("../model/cartModel");
-const userModel = require("../model/userModel");
 const productModel = require("../model/productModel");
 const Validator = require("../validation/validation");
 
-//------------------------------------------------create cart----------------------------------------------------------------
+//------------------------------------------------POST/users/:userId/cart----------------------------------------------------------------
+
 const createCart = async function (req, res) {
   try {
     const userId = req.params.userId;
@@ -133,8 +133,6 @@ const createCart = async function (req, res) {
           data: cartSavedData,
         });
       }
-
-      //     //nhi hai  create kro
     }
   } catch (err) {
     return res.status(500).send({ status: false, error: err.message });

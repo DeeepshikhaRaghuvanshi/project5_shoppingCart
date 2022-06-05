@@ -2,40 +2,38 @@ const orderModel = require("../model/orderModel")
 const cartModel = require("../model/cartModel")
 const Validator = require("../validation/validation")
 
+/* ------------------------------------------------POST/users/:userId/orders-------------------------------------------------------- */
 
 const orderCreate = async function (req, res) {
     try {
         let user_id = req.params.userId
         let data = req.body
+
+        // ----------------------validations start from here ----------------------------
         if (!Validator.isValidBody(data)) {
             return res.status(400).send({
-              status: false,
-              message: "Cart data is required for order",
+                status: false,
+                message: "Cart data is required for order",
             });
-          }
+        }
         let cartId = data.cartId
-        if (!Validator.isValidInputValue(cartId)) {
+        if (!Validator.isValidInputValue(cartId) || !Validator.isValidObjectId(cartId)) {
             return res
-              .status(400)
-              .send({ status: false, message: " CartId is required" });
-          }
-          if (!Validator.isValidObjectId(cartId)) {
-            return res
-              .status(400)
-              .send({ status: false, message: " Enter a valid cartId" });
-          }
+                .status(400)
+                .send({ status: false, message: " CartId is required and Enter a valid cartId" });
+        }
+
         let cartData = await cartModel.findOne({ _id: cartId, userId: user_id }).select({ _id: 0, createdAt: 0, updatedAt: 0, __v: 0 })
         if (!cartData) {
             return res.status(400).send({ status: false, message: "NO cart exist for this user" })
         }
-        // console.log(cartData.items.length)
+
         if (cartData.items.length === 0) {
             return res.status(400).send({ status: false, message: "Your cart is empty" })
         }
 
+        //creating deep copy in order to access nested data
         let cartDetails = JSON.parse(JSON.stringify(cartData))
-        //console.log(cartData)
-        // let cartDetails = req.body
 
         let itemsArr = cartDetails.items
         let totalQuantity = 0
@@ -49,7 +47,10 @@ const orderCreate = async function (req, res) {
             }
             cartDetails.status = data.status
         }
-        if(data.cancellable === false){
+
+        // ----------------------validations end here ----------------------------
+
+        if (data.cancellable === false) {
             cartDetails.cancellable = data.cancellable
         }
         let orderDetails = await orderModel.create(cartDetails)
@@ -64,13 +65,14 @@ const orderCreate = async function (req, res) {
 }
 
 
-//--------------------------------------------put order--------------------------------------------------------------
+/* ------------------------------------------------PUT/users/:userId/orders-------------------------------------------------------- */
 
-const orderUpdate = async function(req,res){
-    try{
-        const userIdFromParams = req.params.userId;
+const orderUpdate = async function (req, res) {
+    try {
+
         const requestBody = req.body;
 
+        // ----------------------validations start from here ----------------------------
         if (!Validator.isValidBody(requestBody)) {
             return res
                 .status(400)
@@ -120,7 +122,7 @@ const orderUpdate = async function(req,res){
                 .status(400)
                 .send({ status: false, message: "order status is already pending" });
         }
-
+        // ----------------------validations end here ----------------------------
         const updateStatus = await orderModel.findOneAndUpdate({ _id: orderId }, { $set: { status: status } }, { new: true });
 
         res.status(200).send({
@@ -130,8 +132,8 @@ const orderUpdate = async function(req,res){
         });
 
     }
-    catch(err){
-        return res.status(500).send({status : false , error : err.message})
+    catch (err) {
+        return res.status(500).send({ status: false, error: err.message })
     }
 }
 
