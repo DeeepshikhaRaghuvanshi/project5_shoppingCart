@@ -211,7 +211,7 @@ const updateCart = async function (req, res) {
     let quantity1 = arr[compareId].quantity;
     if (removeProduct == 0) {
       arr.splice(compareId - 1, 1);
-      cart.totalItems =arr.length
+      cart.totalItems = arr.length
       cart.totalPrice -= product.price * quantity1;
       await cart.save();
       return res.status(200).send({ status: true, data: cart });
@@ -271,16 +271,16 @@ const delCart = async (req, res) => {
     );
     return deleteCart
       ? res.status(204).send({
-          status: false,
-          message: "Cart Successfully Deleted",
-          data: deleteCart,
-        })
+        status: false,
+        message: "Cart Successfully Deleted",
+        data: deleteCart,
+      })
       : res
-          .status(404)
-          .send({
-            status: false,
-            message: "There is no cart under this user id",
-          });
+        .status(404)
+        .send({
+          status: false,
+          message: "There is no cart under this user id",
+        });
   } catch (error) {
     return res.status(500).send({ status: false, message: error.message });
   }

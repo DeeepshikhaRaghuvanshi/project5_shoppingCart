@@ -9,9 +9,11 @@ const Validator = require("../validation/validation");
 const createUser = async function (req, res) {
   try {
     let data = req.body;
+    //files include profileImage
     let files = req.files;
     let { fname, lname, email, phone, password, address } = data;
 
+    //check whether body is present or not
     if (!Validator.isValidBody(data)) {
       return res.status(400).send({
         status: false,
@@ -19,20 +21,16 @@ const createUser = async function (req, res) {
       });
     }
 
-    if (
-      !Validator.isValidInputValue(fname) ||
-      !Validator.isValidOnlyCharacters(fname)
-    ) {
+    // ----------------------each key validation starts here ----------------------------
+
+    if (!Validator.isValidInputValue(fname) || !Validator.isValidOnlyCharacters(fname)) {
       return res.status(400).send({
         status: false,
         message: "First name is required and it should contain only alphabets",
       });
     }
 
-    if (
-      !Validator.isValidInputValue(lname) ||
-      !Validator.isValidOnlyCharacters(lname)
-    ) {
+    if (!Validator.isValidInputValue(lname) || !Validator.isValidOnlyCharacters(lname)) {
       return res.status(400).send({
         status: false,
         message: "Last name is required and it should contain only alphabets",
@@ -47,9 +45,8 @@ const createUser = async function (req, res) {
       });
     }
 
-    const notUniqueEmail = await userModel
-      .findOne({ email })
-      .collation({ locale: "en", strength: 2 });
+    // email should be unique
+    const notUniqueEmail = await userModel.findOne({ email }).collation({ locale: "en", strength: 2 });
     if (notUniqueEmail) {
       return res
         .status(400)
@@ -63,6 +60,7 @@ const createUser = async function (req, res) {
       });
     }
 
+    //phone number should be unique
     const notUniquePhone = await userModel.findOne({ phone });
     if (notUniquePhone) {
       return res
@@ -70,10 +68,7 @@ const createUser = async function (req, res) {
         .send({ status: false, message: "phone number already exist" });
     }
 
-    if (
-      !Validator.isValidInputValue(password) ||
-      !Validator.isValidPassword(password)
-    ) {
+    if (!Validator.isValidInputValue(password) || !Validator.isValidPassword(password)) {
       return res.status(400).send({
         status: false,
         message:
@@ -130,9 +125,13 @@ const createUser = async function (req, res) {
       });
     }
 
+    // ----------------------each key validation ends here ----------------------------
+
+    //uploading file in aws and saving url in fileUrl
     let fileUrl = await uploadFile(files[0]);
     data.profileImage = fileUrl;
 
+    //encryption of password
     const saltRounds = 10;
     let encryptedPassword = bcrypt
       .hash(data.password, saltRounds)
@@ -143,6 +142,7 @@ const createUser = async function (req, res) {
 
     data.password = await encryptedPassword;
 
+    //Registering user
     let savedData = await userModel.create(data);
     return res.status(201).send({
       status: true,
@@ -161,6 +161,7 @@ const loginUser = async function (req, res) {
     let data = req.body;
     let { email, password } = data;
 
+    //check whether body is present or not
     if (!Validator.isValidBody(data)) {
       return res.status(400).send({
         status: false,
@@ -175,9 +176,7 @@ const loginUser = async function (req, res) {
       });
     }
 
-    if (
-      !Validator.isValidInputValue(password) ||
-      !Validator.isValidPassword(password)
+    if (!Validator.isValidInputValue(password) || !Validator.isValidPassword(password)
     ) {
       return res.status(400).send({
         status: false,
@@ -186,15 +185,15 @@ const loginUser = async function (req, res) {
       });
     }
 
-    let hash = await userModel
-      .findOne({ email: email })
-      .collation({ locale: "en", strength: 2 });
-    if (hash == null) {
+    //storing encrypted password from database into hash variable
+    let hash = await userModel.findOne({ email: email }).collation({ locale: "en", strength: 2 });
+    if (!hash) {
       return res
         .status(400)
         .send({ status: false, msg: "Email does not exist" });
     }
 
+    //comparing password 
     let compare = await bcrypt.compare(password, hash.password).then((res) => {
       return res;
     });
@@ -203,6 +202,7 @@ const loginUser = async function (req, res) {
       return res.status(401).send({ status: false, msg: "Incorrect Password" });
     }
 
+    //generating jwt
     const token = jwt.sign(
       {
         userId: hash._id,
@@ -211,6 +211,7 @@ const loginUser = async function (req, res) {
       { expiresIn: "10hr" }
     );
 
+    //setting jwt as bearer token
     res.header("Authorization", "Bearer : " + token);
     return res.status(200).send({
       status: true,
@@ -228,188 +229,181 @@ const getUser = async function (req, res) {
   try {
     let user = req.params.userId;
 
+    if (!Validator.isValidObjectId(userIdfromParam)) {
+      return res
+        .status(400)
+        .send({ status: false, message: " Enter a valid userId" });
+    }
+
     let data = await userModel.findOne({ _id: user });
 
+    //using ternary operator for sending 2 different response based on data state
     return data
-    ? res
+      ? res
         .status(200)
         .send({ status: true, message: "User profile details", data: data })
-    : res
-        .status(400)
-        .send({
-          status: false,
-          message: "No user found!",
-        });
+      : res.status(400).send({
+        status: false,
+        message: "No user found!",
+      });
   } catch (err) {
     res.status(500).send({ err: err.message });
   }
 };
 
 /* ------------------------------------------------PUT/API-------------------------------------------------------- */
+
 const updatedUser = async function (req, res) {
   try {
-  let user = req.params.userId;
-  let data = req.body;
-  let files = req.files;
-  const updates = {};
+    let user = req.params.userId;
+    let data = req.body;
+    let files = req.files;
 
-  if (files && files.length > 0) {
-    if (!Validator.isValidImageType(files[0].mimetype)) {
-      return res.status(400).send({
-        status: false,
-        message: "Only images can be uploaded (jpeg/jpg/png)",
-      });
-    }
-    const updatedProfileImageUrl = await uploadFile(files[0]);
-    updates["profileImage"] = updatedProfileImageUrl;
-  }
+    //creating empty object for adding updates
+    const updates = {};
 
-  let { fname, lname, email, phone, address, password } = data;
-
-  if (fname) {
-    if (
-      !Validator.isValidInputValue(fname) ||
-      !Validator.isValidOnlyCharacters(fname)
-    ) {
-      return res.status(400).send({
-        status: false,
-        message:
-          "First name should be in valid format and should contains only alphabets",
-      });
-    }
-    updates["fname"] = fname.trim();
-  }
-
-  if (lname) {
-    if (
-      !Validator.isValidInputValue(lname) ||
-      !Validator.isValidOnlyCharacters(lname)
-    ) {
-      return res.status(400).send({
-        status: false,
-        message:
-          "Last name should be in valid format and should contains only alphabets",
-      });
-    }
-    updates["lname"] = lname.trim();
-  }
-
-  if (email) {
-    if (!Validator.isValidInputValue(email) || !Validator.isValidEmail(email)) {
-      return res
-        .status(400)
-        .send({ status: false, message: "Enter a valid email" });
+    if (files && files.length > 0) {
+      if (!Validator.isValidImageType(files[0].mimetype)) {
+        return res.status(400).send({
+          status: false,
+          message: "Only images can be uploaded (jpeg/jpg/png)",
+        });
+      }
+      const updatedProfileImageUrl = await uploadFile(files[0]);
+      updates["profileImage"] = updatedProfileImageUrl;
     }
 
-    const notUniqueEmail = await userModel
-      .findOne({ email })
-      .collation({ locale: "en", strength: 2 });
+    let { fname, lname, email, phone, address, password } = data;
 
-    if (notUniqueEmail) {
-      return res
-        .status(400)
-        .send({ status: false, message: "Email address already exist" });
-    }
-    updates["email"] = email.trim();
-  }
-
-  if (phone) {
-    if (!Validator.isValidInputValue(phone) || !Validator.isValidPhone(phone)) {
-      return res.status(400).send({
-        status: false,
-        message: "Enter a valid phone number",
-      });
+    // ----------------------each key validation starts here ----------------------------
+    if (fname) {
+      if (!Validator.isValidInputValue(fname) || !Validator.isValidOnlyCharacters(fname)) {
+        return res.status(400).send({
+          status: false,
+          message:
+            "First name should be in valid format and should contains only alphabets",
+        });
+      }
+      updates["fname"] = fname.trim();
     }
 
-    const notUniquePhone = await userModel.findOne({ phone });
-
-    if (notUniquePhone) {
-      return res
-        .status(400)
-        .send({ status: false, message: "Phone number already exist" });
-    }
-    updates["phone"] = phone.trim();
-  }
-
-  if (password) {
-    if (
-      !Validator.isValidInputValue(password) ||
-      !Validator.isValidPassword(password)
-    ) {
-      return res.status(400).send({
-        status: false,
-        message:
-          "password should be valid and should contains 8 to 15 characters and must have atleast 1 number",
-      });
+    if (lname) {
+      if (!Validator.isValidInputValue(lname) || !Validator.isValidOnlyCharacters(lname)
+      ) {
+        return res.status(400).send({
+          status: false,
+          message:
+            "Last name should be in valid format and should contains only alphabets",
+        });
+      }
+      updates["lname"] = lname.trim();
     }
 
-    const userDetailByUserId = await userModel.findById(user);
-    const isOldPasswordSame = await bcrypt.compare(
-      password,
-      userDetailByUserId.password
-    );
+    if (email) {
+      if (!Validator.isValidInputValue(email) || !Validator.isValidEmail(email)) {
+        return res
+          .status(400)
+          .send({ status: false, message: "Enter a valid email" });
+      }
 
-    if (isOldPasswordSame) {
-      return res
-        .status(400)
-        .send({ status: false, message: "Can't use your recent password" });
+      const notUniqueEmail = await userModel.findOne({ email }).collation({ locale: "en", strength: 2 });
+
+      if (notUniqueEmail) {
+        return res
+          .status(400)
+          .send({ status: false, message: "Email address already exist" });
+      }
+      updates["email"] = email.trim();
     }
 
-    const saltRounds = 10;
-    let encryptedPassword = bcrypt
-      .hash(data.password, saltRounds)
-      .then((hash) => {
-        console.log(`Hash: ${hash}`);
-        return hash;
-      });
+    if (phone) {
+      if (!Validator.isValidInputValue(phone) || !Validator.isValidPhone(phone)) {
+        return res.status(400).send({
+          status: false,
+          message: "Enter a valid phone number",
+        });
+      }
 
-    updates["password"] = await encryptedPassword;
-  }
+      const notUniquePhone = await userModel.findOne({ phone });
 
-  if (address) {
-    let addressObj = {}
-    for (let addType in address) {
-      addressObj[addType] = {};
-      for (let addEl in address[addType]) {
-        if (!Validator.isValidInputValue(address[addType][addEl])) {
-          return res.status(400).send({
-            status: false,
-            message: `${addType} address: ${addEl} should be in valid format `,
-          });
-        }
-        if (addEl == "city") {
-          if (!Validator.isValidOnlyCharacters(address[addType].city)) {
+      if (notUniquePhone) {
+        return res
+          .status(400)
+          .send({ status: false, message: "Phone number already exist" });
+      }
+      updates["phone"] = phone.trim();
+    }
+
+    if (password) {
+      if (!Validator.isValidInputValue(password) || !Validator.isValidPassword(password)) {
+        return res.status(400).send({
+          status: false,
+          message:
+            "password should be valid and should contains 8 to 15 characters and must have atleast 1 number",
+        });
+      }
+
+      const userDetailByUserId = await userModel.findById(user);
+      const isOldPasswordSame = await bcrypt.compare(password, userDetailByUserId.password
+      );
+
+      if (isOldPasswordSame) {
+        return res
+          .status(400)
+          .send({ status: false, message: "Can't use your recent password" });
+      }
+
+      const saltRounds = 10;
+      let encryptedPassword = bcrypt
+        .hash(data.password, saltRounds)
+        .then((hash) => {
+          console.log(`Hash: ${hash}`);
+          return hash;
+        });
+
+      updates["password"] = await encryptedPassword;
+    }
+
+    if (address) {
+      for (let addType in address) {
+        for (let addEl in address[addType]) {
+          if (!Validator.isValidInputValue(address[addType][addEl])) {
             return res.status(400).send({
               status: false,
-              message: `${addType} address: city should only contain alphabets `,
+              message: `${addType} address: ${addEl} should be in valid format `,
             });
           }
-        }
-        if (addEl == "pincode") {
-          if (!Validator.isValidPincode(address[addType].pincode)) {
-            return res.status(400).send({
-              status: false,
-              message: `${addType} address: pincode should only be of 6-digits`,
-            });
+          if (addEl == "city") {
+            if (!Validator.isValidOnlyCharacters(address[addType].city)) {
+              return res.status(400).send({
+                status: false,
+                message: `${addType} address: city should only contain alphabets `,
+              });
+            }
           }
+          if (addEl == "pincode") {
+            if (!Validator.isValidPincode(address[addType].pincode)) {
+              return res.status(400).send({
+                status: false,
+                message: `${addType} address: pincode should only be of 6-digits`,
+              });
+            }
+          }
+          updates[`address.${addType}.${addEl}`] =
+            address[addType][addEl].trim();
         }
-        updates[`address.${addType}.${addEl}`] = (address[addType][addEl]).trim();
       }
     }
-  }
+    // ----------------------each key validation starts here ----------------------------
 
-  let updatedData = await userModel
-    .findByIdAndUpdate({ _id: user }, { $set: {...updates}}, { new: true })
-    .collation({ locale: "en", strength: 2 });
-  return res.status(200).send({
-    status: true,
-    message: "User profile updated",
-    data: updatedData,
-  });
-
-  }
-
-  catch (err) {
+    //updation : user details
+    let updatedData = await userModel.findByIdAndUpdate({ _id: user }, { $set: { ...updates } }, { new: true }).collation({ locale: "en", strength: 2 });
+    return res.status(200).send({
+      status: true,
+      message: "User profile updated",
+      data: updatedData,
+    });
+  } catch (err) {
     res.status(500).send({ err: err.message });
   }
 };
